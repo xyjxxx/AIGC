@@ -1,5 +1,6 @@
 """脚本生成 API"""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -9,6 +10,15 @@ from app.services.ai_proxy import AIProxy
 from app.utils.auth_deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["scripts"])
+
+
+class GenerateScriptRequest(BaseModel):
+    template_type: str = "口播种草型"
+    product_features: str = "优质商品，性价比高，用户好评如潮"
+
+
+class RewriteSegmentRequest(BaseModel):
+    action: str = "more_interesting"
 
 
 async def _get_ai_proxy(project_id: int, user_id: int, db: AsyncSession):
@@ -34,8 +44,7 @@ async def _get_ai_proxy(project_id: int, user_id: int, db: AsyncSession):
 @router.post("/projects/{project_id}/scripts/generate")
 async def generate_scripts(
     project_id: int,
-    template_type: str = "口播种草型",
-    product_features: str = "优质商品，性价比高，用户好评如潮",
+    body: GenerateScriptRequest,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -49,8 +58,8 @@ async def generate_scripts(
     # 调用AI生成
     data = await proxy.generate_script(
         product_name=project.name,
-        product_features=product_features,
-        template_type=template_type,
+        product_features=body.product_features,
+        template_type=body.template_type,
         target_platform=project.target_platform,
         target_duration=project.target_duration,
     )
@@ -151,7 +160,7 @@ async def get_scripts(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/api/scripts/{script_id}/segments/{segment_id}/rewrite")
 async def rewrite_segment(
-    script_id: int, segment_id: int, action: str = "more_interesting",
+    script_id: int, segment_id: int, body: RewriteSegmentRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """AI改写脚本段落"""
@@ -163,7 +172,7 @@ async def rewrite_segment(
     script_result = await db.execute(select(Script).where(Script.id == script_id))
     script = script_result.scalar_one()
 
-    proxy, _ = await _get_ai_proxy(script.project_id, db)
-    new_text = await proxy.optimize_video_script(segment.narration, action)
+    proxy, _ = await _get_ai_proxy(script.project_id, script.project_id, db)
+    new_text = await proxy.optimize_video_script(segment.narration, body.action)
 
     return {"text": new_text}

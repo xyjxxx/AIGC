@@ -9,19 +9,29 @@ from app.config import settings
 from app.database import engine, Base, async_session
 from app.routers import projects, scripts, modules, auth
 from app.models import User
-from sqlalchemy import select
+from sqlalchemy import select, create_engine
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时：确保数据库表已创建
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    # 初始化管理员账号
-    async with async_session() as session:
-        await auth.init_admin(session)
-        await session.commit()
+    # 启动时：使用同步引擎创建表（避免 aiosqlite greenlet 问题）
+    if settings.use_sqlite:
+        sync_url = settings.database_url.replace("sqlite+aiosqlite:///", "sqlite:///")
+        sync_engine = create_engine(sync_url)
+        Base.metadata.create_all(sync_engine)
+        # 使用同步会话初始化管理员
+        from sqlalchemy.orm import Session
+        with Session(sync_engine) as session:
+            auth.init_admin_sync(session)
+            session.commit()
+        sync_engine.dispose()
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with async_session() as session:
+            await auth.init_admin(session)
+            await session.commit()
     # 确保存储目录存在
     os.makedirs(settings.storage_upload_path, exist_ok=True)
     os.makedirs(settings.storage_output_path, exist_ok=True)

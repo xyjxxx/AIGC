@@ -1,5 +1,5 @@
 """数据模型定义"""
-from sqlalchemy import Column, BigInteger, String, Integer, Float, Boolean, Text, JSON, TIMESTAMP, ForeignKey, Index, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Float, Boolean, Text, JSON, TIMESTAMP, ForeignKey, Index, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -16,13 +16,13 @@ class User(Base):
     """用户表 — 管理员创建用户账号"""
     __tablename__ = "users"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(64), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)  # bcrypt hash
     display_name = Column(String(64), default="")
     role = Column(String(10), default="user", comment="admin / user")
     is_active = Column(Boolean, default=True, comment="管理员可禁用账号")
-    created_by = Column(BigInteger, nullable=True, comment="创建者（管理员）ID")
+    created_by = Column(Integer, nullable=True, comment="创建者（管理员）ID")
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
@@ -33,8 +33,8 @@ class User(Base):
 class UserAIConfig(Base):
     __tablename__ = "user_ai_configs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     platform = Column(String(20), nullable=False, comment="openai / doubao")
     api_token_encrypted = Column(Text, nullable=False, comment="AES-256-GCM 加密后的 API Token")
     is_active = Column(Boolean, default=True)
@@ -51,8 +51,8 @@ class UserAIConfig(Base):
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(200), nullable=False)
     target_platform = Column(String(20), default="抖音")
     target_duration = Column(Integer, default=45)
@@ -75,8 +75,8 @@ class Project(Base):
 class Script(Base):
     __tablename__ = "scripts"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    project_id = Column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     version = Column(Integer, default=1)
     template_type = Column(String(30))
     title = Column(String(500))
@@ -96,8 +96,8 @@ class Script(Base):
 class ScriptSegment(Base):
     __tablename__ = "script_segments"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    script_id = Column(BigInteger, ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    script_id = Column(Integer, ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False)
     segment_type = Column(String(20), nullable=False, comment="opening/body/closing")
     narration = Column(Text, nullable=False, comment="口播文案")
     visual_description = Column(Text)
@@ -113,9 +113,9 @@ class ScriptSegment(Base):
 class StoryboardShot(Base):
     __tablename__ = "storyboard_shots"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    project_id = Column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    script_id = Column(BigInteger)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    script_id = Column(Integer)
     shot_number = Column(Integer, nullable=False, comment="分镜编号")
     duration = Column(Float, nullable=False, default=3.0)
     scene_type = Column(String(20), default="MEDIUM", comment="CLOSE_UP/MEDIUM/LONG/WIDE")
@@ -136,9 +136,9 @@ class StoryboardShot(Base):
 class ShotImage(Base):
     __tablename__ = "shot_images"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    shot_id = Column(BigInteger, ForeignKey("storyboard_shots.id", ondelete="CASCADE"), nullable=False)
-    project_id = Column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    shot_id = Column(Integer, ForeignKey("storyboard_shots.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     style = Column(String(30), default="真实摄影")
     prompt = Column(Text)
     negative_prompt = Column(Text)
@@ -156,8 +156,8 @@ class ShotImage(Base):
 class Video(Base):
     __tablename__ = "videos"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    project_id = Column(BigInteger, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     voice_type = Column(String(30), default="女-温柔")
     voice_speed = Column(Float, default=1.0)
     voice_tone = Column(String(20), default="活泼")
@@ -169,7 +169,7 @@ class Video(Base):
     fps = Column(Integer, default=30)
     output_format = Column(String(10), default="MP4")
     video_url = Column(String(1000))
-    file_size = Column(BigInteger, default=0)
+    file_size = Column(Integer, default=0)
     duration = Column(Integer, default=0)
     status = Column(String(20), default="pending")
     created_at = Column(TIMESTAMP, server_default=func.now())

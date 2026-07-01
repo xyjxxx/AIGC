@@ -1,7 +1,9 @@
 """分镜、分镜图、视频、AI平台配置 API"""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import Optional
 
 from app.database import get_db
 from app.models import Project, Script, ScriptSegment, StoryboardShot, ShotImage, Video, UserAIConfig
@@ -10,6 +12,19 @@ from app.utils.crypto import encrypt_token, decrypt_token
 from app.utils.auth_deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["storyboard-images-video-ai"])
+
+
+class GenerateStoryboardRequest(BaseModel):
+    script_id: int = 0
+
+
+class GenerateImagesRequest(BaseModel):
+    style: str = "真实摄影"
+
+
+class SaveAIConfigRequest(BaseModel):
+    platform: str
+    api_token: str
 
 
 async def _get_ai_proxy(project_id: int, user_id: int, db: AsyncSession):
@@ -26,13 +41,13 @@ async def _get_ai_proxy(project_id: int, user_id: int, db: AsyncSession):
 
 # ===== 分镜 =====
 @router.post("/projects/{project_id}/storyboard/generate")
-async def generate_storyboard(project_id: int, script_id: int = 0, db: AsyncSession = Depends(get_db)):
+async def generate_storyboard(project_id: int, body: GenerateStoryboardRequest, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """生成分镜"""
-    proxy, _ = await _get_ai_proxy(project_id, db)
+    proxy, _ = await _get_ai_proxy(project_id, user["user_id"], db)
 
     # 获取选中的脚本
-    if script_id:
-        result = await db.execute(select(Script).where(Script.id == script_id))
+    if body.script_id:
+        result = await db.execute(select(Script).where(Script.id == body.script_id))
     else:
         result = await db.execute(select(Script).where(Script.project_id == project_id, Script.is_selected == True))
     script = result.scalar_one_or_none()
@@ -103,9 +118,9 @@ async def get_storyboard(project_id: int, db: AsyncSession = Depends(get_db)):
 
 # ===== 分镜图 =====
 @router.post("/projects/{project_id}/images/generate")
-async def generate_images(project_id: int, style: str = "真实摄影", db: AsyncSession = Depends(get_db)):
+async def generate_images(project_id: int, body: GenerateImagesRequest, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """为所有分镜生成图片提示词"""
-    proxy, _ = await _get_ai_proxy(project_id, db)
+    proxy, _ = await _get_ai_proxy(project_id, user["user_id"], db)
 
     shots_result = await db.execute(
         select(StoryboardShot).where(StoryboardShot.project_id == project_id).order_by(StoryboardShot.sort_order)
@@ -115,9 +130,9 @@ async def generate_images(project_id: int, style: str = "真实摄影", db: Asyn
 
     images = []
     for shot in shots:
-        prompt_data = await proxy.generate_image_prompt(shot.visual_description or "产品展示", style)
+        prompt_data = await proxy.generate_image_prompt(shot.visual_description or "产品展示", body.style)
         img = ShotImage(
-            shot_id=shot.id, project_id=project_id, style=style,
+            shot_id=shot.id, project_id=project_id, style=body.style,
             prompt=prompt_data.get("prompt", ""),
             negative_prompt=prompt_data.get("negative_prompt", ""),
             image_url=f"/storage/outputs/placeholder_{shot.shot_number}.png",
@@ -153,19 +168,52 @@ async def get_images(project_id: int, db: AsyncSession = Depends(get_db)):
     } for i in imgs]}
 
 
+class ComposeVideoRequest(BaseModel):
+    voiceType: str = "女-温柔"
+    voiceSpeed: float = 1.0
+    voiceTone: str = "活泼"
+    bgmSource: Optional[str] = "轻快推荐"
+    bgmVolume: float = 0.3
+    subtitleStyle: str = "带货风"
+    resolution: str = "1080P"
+    aspectRatio: str = "9:16"
+    fps: int = 30
+    outputFormat: str = "MP4"
+
+
 # ===== 视频 =====
 @router.post("/projects/{project_id}/video/compose")
-async def compose_video(project_id: int, db: AsyncSession = Depends(get_db), **kwargs):
-    """合成视频（当前为占位实现）"""
+async def compose_video(project_id: int, body: ComposeVideoRequest, db: AsyncSession = Depends(get_db)):
+    """合成视频"""
     result = await db.execute(select(Video).where(Video.project_id == project_id))
     existing = result.scalar_one_or_none()
 
     if existing:
         video = existing
-        for k, v in kwargs.items():
-            if hasattr(video, k): setattr(video, k, v)
+        video.voice_type = body.voiceType
+        video.voice_speed = body.voiceSpeed
+        video.voice_tone = body.voiceTone
+        video.bgm_source = body.bgmSource
+        video.bgm_volume = body.bgmVolume
+        video.subtitle_style = body.subtitleStyle
+        video.resolution = body.resolution
+        video.aspect_ratio = body.aspectRatio
+        video.fps = body.fps
+        video.output_format = body.outputFormat
     else:
-        video = Video(project_id=project_id, **{k: v for k, v in kwargs.items() if hasattr(Video, k)})
+        video = Video(
+            project_id=project_id,
+            voice_type=body.voiceType,
+            voice_speed=body.voiceSpeed,
+            voice_tone=body.voiceTone,
+            bgm_source=body.bgmSource,
+            bgm_volume=body.bgmVolume,
+            subtitle_style=body.subtitleStyle,
+            resolution=body.resolution,
+            aspect_ratio=body.aspectRatio,
+            fps=body.fps,
+            output_format=body.outputFormat,
+        )
         db.add(video)
 
     video.status = "done"
@@ -222,14 +270,14 @@ async def get_ai_config(user: dict = Depends(get_current_user), db: AsyncSession
 
 
 @router.post("/ai-platform/config")
-async def save_ai_config(platform: str, api_token: str, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def save_ai_config(body: SaveAIConfigRequest, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """保存AI平台配置"""
     result = await db.execute(
-        select(UserAIConfig).where(UserAIConfig.user_id == user["user_id"], UserAIConfig.platform == platform)
+        select(UserAIConfig).where(UserAIConfig.user_id == user["user_id"], UserAIConfig.platform == body.platform)
     )
     config = result.scalar_one_or_none()
 
-    encrypted = encrypt_token(api_token)
+    encrypted = encrypt_token(body.api_token)
 
     if config:
         config.api_token_encrypted = encrypted
@@ -241,7 +289,7 @@ async def save_ai_config(platform: str, api_token: str, user: dict = Depends(get
         )
         for old in old_result.scalars():
             old.is_active = False
-        config = UserAIConfig(user_id=user["user_id"], platform=platform, api_token_encrypted=encrypted, is_active=True)
+        config = UserAIConfig(user_id=user["user_id"], platform=body.platform, api_token_encrypted=encrypted, is_active=True)
         db.add(config)
 
     return {"ok": True}

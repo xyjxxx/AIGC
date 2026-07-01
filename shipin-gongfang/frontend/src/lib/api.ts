@@ -21,8 +21,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: '请求失败' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    let message = `请求失败 (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      // FastAPI 返回的 detail 可能是字符串或数组
+      if (typeof err.detail === 'string') {
+        message = err.detail;
+      } else if (Array.isArray(err.detail)) {
+        message = err.detail.map((e: Record<string, unknown>) => e.msg || JSON.stringify(e)).join('; ');
+      } else if (err.message) {
+        message = String(err.message);
+      }
+    } catch {}
+    throw new Error(message);
   }
   return res.json();
 }

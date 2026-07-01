@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+*.db
+
+# Node
+node_modules/
+.next/
+
+# Docker
+mysql_data/
+redis_data/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Storage (local)
+storage/uploads/*
+storage/outputs/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+
+# Env
+.env
+!.env.example
